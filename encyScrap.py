@@ -1,7 +1,8 @@
+import configparser
+from datetime import datetime
 import json
 import requests
 import time
-from datetime import datetime
 
 
 def getResourceEcyclopediaData(id: int) -> dict:
@@ -13,17 +14,65 @@ def getResourceEcyclopediaData(id: int) -> dict:
 
   if response.status_code != 200:
     raise Exception("Error while fetching data from API")
-  
+
   return response.json()
 
-id = 101
 
-data = getResourceEcyclopediaData(id)
+def readConfig(configFile: str) -> configparser.ConfigParser:
+  config = configparser.ConfigParser()
 
-now = datetime.now()
-current_time = now.strftime("%d.%m.%Y_%H:%M")
+  config.read(configFile)
 
-filename = f'export/{id}_{data["name"]}_{current_time}.json'
+  return config
 
-with open(filename, "w") as outfile:
-  json.dump(data, outfile)
+
+def scrapSimcoEncyclopedia():
+  config = readConfig("config.ini")
+
+  if config.getboolean("encyclopediaScrap", "run") is False:
+    print("Aborting simcoEnc scraping, config turned off")
+    return
+
+  id = int(config.get("encyclopediaScrap", "startID"))
+
+  data = getResourceEcyclopediaData(id)
+
+  data.update({"phase": "normal"})
+
+  now = datetime.now()
+  current_time = now.strftime("%d.%m.%Y_%H:%M")
+
+  filename = f'export/{id}_{data["name"]}_{current_time}.json'
+
+  with open(filename, "w") as outfile:
+    json.dump(data, outfile)
+
+  id += 1
+  config.set("encyclopediaScrap", "startID", str(id))
+  saveConfigFile(config)
+
+
+def saveConfigFile(config: configparser.ConfigParser):
+  with open("config.ini", "w") as configfile:
+    config.write(configfile)
+
+
+def regenConfigFile():
+  config = configparser.ConfigParser()
+
+  config.add_section("encyclopediaScrap")
+  config.set("encyclopediaScrap", "startID", "1")
+  config.set("encyclopediaScrap", "run", "True")
+  config.set("encyclopediaScrap", "phase", "normal")
+  with open("config.ini", "w") as configfile:
+    config.write(configfile)
+
+
+# MAIN FUNCTION HERE
+
+if __name__ == "__main__":
+  config = readConfig("config.ini")
+  id = int(config.get("encyclopediaScrap", "startID"))
+  while id <= 145:
+    scrapSimcoEncyclopedia()
+    time.sleep(300)
